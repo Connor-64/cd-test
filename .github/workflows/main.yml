@@ -1,0 +1,67 @@
+name: "Download Files"
+
+on:
+  workflow_dispatch:
+  ###schedule:
+    ###- cron: "17 17 * * *"
+
+permissions:
+  contents: write
+  packages: write
+  actions: write
+
+jobs:
+  Download:
+    runs-on: ubuntu-latest
+    name: "Download Files"
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4.1.1
+        with:
+          fetch-depth: 0
+
+      - name: Download Files
+        run: |
+          curl -L https://zip.baipiao.eu.org -o txt.zip
+          git checkout --orphan tmp_work
+          git branch -d main
+          echo "DATE=$(date "+%Y.%m.%d-%H.%M.%S")" >> $GITHUB_ENV
+
+      - name: Upload to repository
+        uses: stefanzweifel/git-auto-commit-action@v4.16.0
+        with:
+          commit_message: ${{ env.DATE }}
+          create_branch: true
+          branch: main
+          push_options: --force
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.DATE }}
+          release_name: Release ${{ env.DATE }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./txt.zip
+          asset_name: txt.zip
+          asset_content_type: application/zip
+
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2.0.6
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 0
+          delete_run_by_conclusion_pattern: "cancelled, skipped, success"
